@@ -25,7 +25,7 @@ use hub75_pio::lut::GammaLut;
 
 use rp_pico as bsp;
 
-static mut DISPLAY_BUFFER: hub75_pio::DisplayMemory<64, 32, 12> = hub75_pio::DisplayMemory::new();
+static mut DISPLAY_BUFFER: hub75_pio::DisplayMemory<64, 64, 12> = hub75_pio::DisplayMemory::new();
 
 const FRAMES: [&[u8]; 12] = [
     include_bytes!("../assets/01.qoi"),
@@ -104,6 +104,7 @@ fn main() -> ! {
                 addrb: pins.gpio7.into_function().into_pull_type().into_dyn_pin(),
                 addrc: pins.gpio8.into_function().into_pull_type().into_dyn_pin(),
                 addrd: pins.gpio9.into_function().into_pull_type().into_dyn_pin(),
+                addre: pins.gpio10.into_function().into_pull_type().into_dyn_pin(),
                 clk: pins.gpio11.into_function().into_pull_type().into_dyn_pin(),
                 lat: pins.gpio12.into_function().into_pull_type().into_dyn_pin(),
                 oe: pins.gpio13.into_function().into_pull_type().into_dyn_pin(),
@@ -120,9 +121,10 @@ fn main() -> ! {
     loop {
         for raw_frame in FRAMES {
             let frame = Qoi::new(raw_frame).unwrap();
-            Image::new(&frame, Point::zero())
-                .draw(&mut display)
-                .unwrap();
+            let mut image = Image::new(&frame, Point::zero());
+            image.draw(&mut display).unwrap();
+            image.translate_mut(Point::new(0, 32));
+            image.draw(&mut display).unwrap();
             display.commit();
             delay.delay_ms(100);
         }
