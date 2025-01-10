@@ -167,7 +167,6 @@ where
     mem: &'static mut DisplayMemory<W, H, B>,
     fb_loop_ch: Channel<CH1>,
     benchmark: bool,
-    brightness: u8,
     lut: &'a dyn lut::Lut<B, C>,
 }
 
@@ -497,7 +496,6 @@ where
             mem: buffer,
             fb_loop_ch,
             benchmark,
-            brightness: 255,
             lut,
         }
     }
@@ -530,36 +528,34 @@ where
     ///
     /// Note that the coordinates are 0-indexed.
     pub fn set_pixel(&mut self, x: usize, y: usize, color: C) {
-        // invert the screen
-        let x = W - 1 - x;
-        let y = H - 1 - y;
-        // Half of the screen
-        let h = y > (H / 2) - 1;
-        let shift = if h { 3 } else { 0 };
-        let (c_r, c_g, c_b) = self.lut.lookup(color);
-        let c_r: u16 = ((c_r as f32) * (self.brightness as f32 / 255f32)) as u16;
-        let c_g: u16 = ((c_g as f32) * (self.brightness as f32 / 255f32)) as u16;
-        let c_b: u16 = ((c_b as f32) * (self.brightness as f32 / 255f32)) as u16;
-        let base_idx = x + ((y % (H / 2)) * W * B);
-        for b in 0..B {
-            // Extract the n-th bit of each component of the color and pack them
-            let cr = c_r >> b & 0b1;
-            let cg = c_g >> b & 0b1;
-            let cb = c_b >> b & 0b1;
-            let packed_rgb = (cb << 2 | cg << 1 | cr) as u8;
-            let idx = base_idx + b * W;
-            if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
-                self.mem.fb1[idx] &= !(0b111 << shift);
-                self.mem.fb1[idx] |= packed_rgb << shift;
-            } else {
-                self.mem.fb0[idx] &= !(0b111 << shift);
-                self.mem.fb0[idx] |= packed_rgb << shift;
-            }
-        }
+        let fb =
+        if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
+            &mut self.mem.fb1
+        } else {
+            &mut self.mem.fb0
+        };
+        set_pixel_on_fb(fb, self.lut, x, y, color)
     }
+}
 
-    pub fn set_brightness(&mut self, brightness: u8) {
-        self.brightness = brightness
+fn set_pixel_on_fb<const W: usize, const H: usize, const B: usize, C: RgbColor>(fb: &mut [u8; fb_bytes(W, H, B)], lut: &dyn lut::Lut<B, C>, x: usize, y: usize, color: C) {
+    // invert the screen
+    let x = W - 1 - x;
+    let y = H - 1 - y;
+    // Half of the screen
+    let h = y > (H / 2) - 1;
+    let shift = if h { 3 } else { 0 };
+    let (c_r, c_g, c_b) = lut.lookup(color);
+    let base_idx = x + ((y % (H / 2)) * W * B);
+    for b in 0..B {
+        // Extract the n-th bit of each component of the color and pack them
+        let cr = c_r >> b & 0b1;
+        let cg = c_g >> b & 0b1;
+        let cb = c_b >> b & 0b1;
+        let packed_rgb = (cb << 2 | cg << 1 | cr) as u8;
+        let idx = base_idx + b * W;
+        fb[idx] &= !(0b111 << shift);
+        fb[idx] |= packed_rgb << shift;
     }
 }
 
@@ -588,10 +584,16 @@ where
     fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
-    {
+        {
+            let fb =
+            if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
+                &mut self.mem.fb1
+            } else {
+                &mut self.mem.fb0
+            };
         for Pixel(coord, color) in pixels.into_iter() {
             if coord.x < W.try_into().unwrap() && coord.y < H.try_into().unwrap() {
-                self.set_pixel(coord.x as usize, coord.y as usize, color);
+                set_pixel_on_fb(fb, self.lut, coord.x as usize, coord.y as usize, color);
             }
         }
 
