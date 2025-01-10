@@ -29,9 +29,9 @@
 
 // TODO: Implement the drop trait to release DMA & PIO?
 // TODO: organize these
-use rp2040_hal::dma::{Channel, ChannelIndex, SingleChannel};
 use core::convert::TryInto;
 use embedded_graphics::prelude::*;
+use rp2040_hal::dma::{Channel, ChannelIndex, SingleChannel};
 use rp2040_hal::gpio::{DynPinId, Function, Pin, PullNone};
 use rp2040_hal::pio::{
     Buffers, PIOBuilder, PIOExt, PinDir, ShiftDirection, StateMachineIndex, UninitStateMachine, PIO,
@@ -528,8 +528,7 @@ where
     ///
     /// Note that the coordinates are 0-indexed.
     pub fn set_pixel(&mut self, x: usize, y: usize, color: C) {
-        let fb =
-        if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
+        let fb = if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
             &mut self.mem.fb1
         } else {
             &mut self.mem.fb0
@@ -538,7 +537,13 @@ where
     }
 }
 
-fn set_pixel_on_fb<const W: usize, const H: usize, const B: usize, C: RgbColor>(fb: &mut [u8; fb_bytes(W, H, B)], lut: &dyn lut::Lut<B, C>, x: usize, y: usize, color: C) {
+fn set_pixel_on_fb<const W: usize, const H: usize, const B: usize, C: RgbColor>(
+    fb: &mut [u8; fb_bytes(W, H, B)],
+    lut: &dyn lut::Lut<B, C>,
+    x: usize,
+    y: usize,
+    color: C,
+) {
     // invert the screen
     let x = W - 1 - x;
     let y = H - 1 - y;
@@ -584,13 +589,12 @@ where
     fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
-        {
-            let fb =
-            if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
-                &mut self.mem.fb1
-            } else {
-                &mut self.mem.fb0
-            };
+    {
+        let fb = if self.mem.fbptr[0] == (self.mem.fb0.as_ptr() as u32) {
+            &mut self.mem.fb1
+        } else {
+            &mut self.mem.fb0
+        };
         for Pixel(coord, color) in pixels.into_iter() {
             if coord.x < W.try_into().unwrap() && coord.y < H.try_into().unwrap() {
                 set_pixel_on_fb(fb, self.lut, coord.x as usize, coord.y as usize, color);
